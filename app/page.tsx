@@ -1,11 +1,32 @@
 'use client';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 export default function LoomPrototype() {
   const [bpm, setBpm] = useState(80);
   const [isActive, setIsActive] = useState(false);
   const audioCtx = useRef<AudioContext | null>(null);
   const nextNoteTime = useRef(0);
+  const rafId = useRef<number | null>(null);
+  const isRunning = useRef(false);
+  const bpmRef = useRef(bpm);
+
+  useEffect(() => {
+    bpmRef.current = bpm;
+  }, [bpm]);
+
+  useEffect(() => {
+    return () => {
+      isRunning.current = false;
+      if (rafId.current !== null) {
+        cancelAnimationFrame(rafId.current);
+        rafId.current = null;
+      }
+      if (audioCtx.current && audioCtx.current.state !== 'closed') {
+        void audioCtx.current.close();
+      }
+      audioCtx.current = null;
+    };
+  }, []);
 
   const playThud = (time: number) => {
     const ctx = audioCtx.current;
@@ -26,25 +47,51 @@ export default function LoomPrototype() {
 
   const scheduleLoop = () => {
     const ctx = audioCtx.current;
-    if (!ctx) return;
+    if (!ctx || !isRunning.current) return;
 
     while (nextNoteTime.current < ctx.currentTime + 0.1) {
       playThud(nextNoteTime.current);
-      nextNoteTime.current += 60.0 / bpm;
+      nextNoteTime.current += 60.0 / bpmRef.current;
     }
 
-    requestAnimationFrame(scheduleLoop);
+    rafId.current = requestAnimationFrame(scheduleLoop);
   };
 
-  const initAudio = () => {
-    if (!audioCtx.current) {
-      audioCtx.current = new (window.AudioContext ||
-        (window as Window & { webkitAudioContext?: typeof AudioContext })
-          .webkitAudioContext)();
-      nextNoteTime.current = audioCtx.current.currentTime;
-      setIsActive(true);
-      scheduleLoop();
+  const stopAudio = () => {
+    isRunning.current = false;
+    if (rafId.current !== null) {
+      cancelAnimationFrame(rafId.current);
+      rafId.current = null;
     }
+    if (audioCtx.current && audioCtx.current.state === 'running') {
+      void audioCtx.current.suspend();
+    }
+    setIsActive(false);
+  };
+
+  const initAudio = async () => {
+    if (isRunning.current) {
+      stopAudio();
+      return;
+    }
+
+    if (!audioCtx.current) {
+      const AudioContextClass =
+        window.AudioContext ||
+        (window as Window & { webkitAudioContext?: typeof AudioContext })
+          .webkitAudioContext;
+      if (!AudioContextClass) return;
+      audioCtx.current = new AudioContextClass();
+    }
+
+    if (audioCtx.current.state === 'suspended') {
+      await audioCtx.current.resume();
+    }
+
+    nextNoteTime.current = audioCtx.current.currentTime;
+    isRunning.current = true;
+    setIsActive(true);
+    scheduleLoop();
   };
 
   return (
@@ -62,7 +109,7 @@ export default function LoomPrototype() {
             className={`flex h-32 w-32 items-center justify-center rounded-full border border-[#7ce8ff]/20 ${isActive ? 'animate-ping' : ''}`}
           >
             <span className="text-xs uppercase tracking-widest opacity-40">
-              {isActive ? 'Lattice Active' : 'Initialize'}
+              {isActive ? 'Pause Lattice' : 'Initialize'}
             </span>
           </div>
         </button>
