@@ -15,7 +15,8 @@ export const calculateTension = (heartRate: number): number => {
   const MIN_BPM = 50;
   const MAX_BPM = 180;
   const clamped = Math.min(Math.max(heartRate, MIN_BPM), MAX_BPM);
-  return (clamped - MIN_BPM) / (MAX_BPM - MIN_BPM);
+  const exponentialTension = Math.pow((clamped - MIN_BPM) / (MAX_BPM - MIN_BPM), 1.5);
+  return exponentialTension;
 };
 
 type StageProps = {
