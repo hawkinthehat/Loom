@@ -1,133 +1,83 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
 
-export default function LoomPrototype() {
-  const [bpm, setBpm] = useState(80);
-  const [isActive, setIsActive] = useState(false);
-  const audioCtx = useRef<AudioContext | null>(null);
-  const nextNoteTime = useRef(0);
-  const rafId = useRef<number | null>(null);
-  const isRunning = useRef(false);
-  const bpmRef = useRef(bpm);
+import { useHeartRate } from '../hooks/useHeartRate';
 
-  useEffect(() => {
-    bpmRef.current = bpm;
-  }, [bpm]);
+type TensionStringProps = {
+  stressLevel: number;
+  targetBPM: number;
+};
 
-  useEffect(() => {
-    return () => {
-      isRunning.current = false;
-      if (rafId.current !== null) {
-        cancelAnimationFrame(rafId.current);
-        rafId.current = null;
-      }
-      if (audioCtx.current && audioCtx.current.state !== 'closed') {
-        void audioCtx.current.close();
-      }
-      audioCtx.current = null;
-    };
-  }, []);
-
-  const playThud = (time: number) => {
-    const ctx = audioCtx.current;
-    if (!ctx) return;
-
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(100, time);
-    osc.frequency.exponentialRampToValueAtTime(0.01, time + 0.4);
-    gain.gain.setValueAtTime(0.3, time);
-    gain.gain.exponentialRampToValueAtTime(0.01, time + 0.4);
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.start(time);
-    osc.stop(time + 0.4);
-  };
-
-  const scheduleLoop = () => {
-    const ctx = audioCtx.current;
-    if (!ctx || !isRunning.current) return;
-
-    while (nextNoteTime.current < ctx.currentTime + 0.1) {
-      playThud(nextNoteTime.current);
-      nextNoteTime.current += 60.0 / bpmRef.current;
-    }
-
-    rafId.current = requestAnimationFrame(scheduleLoop);
-  };
-
-  const stopAudio = () => {
-    isRunning.current = false;
-    if (rafId.current !== null) {
-      cancelAnimationFrame(rafId.current);
-      rafId.current = null;
-    }
-    if (audioCtx.current && audioCtx.current.state === 'running') {
-      void audioCtx.current.suspend();
-    }
-    setIsActive(false);
-  };
-
-  const initAudio = async () => {
-    if (isRunning.current) {
-      stopAudio();
-      return;
-    }
-
-    if (!audioCtx.current) {
-      const AudioContextClass =
-        window.AudioContext ||
-        (window as Window & { webkitAudioContext?: typeof AudioContext })
-          .webkitAudioContext;
-      if (!AudioContextClass) return;
-      audioCtx.current = new AudioContextClass();
-    }
-
-    if (audioCtx.current.state === 'suspended') {
-      await audioCtx.current.resume();
-    }
-
-    nextNoteTime.current = audioCtx.current.currentTime;
-    isRunning.current = true;
-    setIsActive(true);
-    scheduleLoop();
-  };
+const TensionString = ({ stressLevel, targetBPM }: TensionStringProps) => {
+  const width = Math.min(100, 30 + stressLevel * 70);
+  const displayStress = Math.round(stressLevel * 100);
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-[#06090f] p-6 font-sans text-[#eef6ff]">
-      <div className="space-y-8 text-center">
-        <h1 className="text-5xl font-light tracking-[0.2em] opacity-80">LOOM</h1>
-
-        <button
-          onClick={initAudio}
-          className={`flex h-64 w-64 items-center justify-center rounded-full border border-[#244262] transition-all duration-700
-            ${isActive ? 'scale-110 shadow-[0_0_50px_rgba(124,232,255,0.1)]' : 'hover:border-[#7ce8ff]'}
-          `}
-        >
-          <div
-            className={`flex h-32 w-32 items-center justify-center rounded-full border border-[#7ce8ff]/20 ${isActive ? 'animate-ping' : ''}`}
-          >
-            <span className="text-xs uppercase tracking-widest opacity-40">
-              {isActive ? 'Pause Lattice' : 'Initialize'}
-            </span>
-          </div>
-        </button>
-
-        <div className="flex flex-col items-center gap-4 pt-10">
-          <p className="text-[10px] uppercase tracking-[0.3em] text-[#95a7bc]">
-            Tension Control: {bpm} BPM
-          </p>
-          <input
-            type="range"
-            min="40"
-            max="140"
-            value={bpm}
-            onChange={(e) => setBpm(Number(e.target.value))}
-            className="w-48 accent-[#7ce8ff] opacity-50 transition-opacity hover:opacity-100"
-          />
-        </div>
+    <div className="w-full max-w-lg space-y-4 text-center">
+      <div className="text-[10px] uppercase tracking-[0.3em] text-slate-400">
+        Target Rhythm: {targetBPM} BPM
       </div>
-    </main>
+      <div className="h-2 w-full rounded-full bg-slate-800/80">
+        <div
+          className="h-2 rounded-full bg-cyan-300 transition-all duration-500"
+          style={{ width: `${width}%` }}
+        />
+      </div>
+      <div className="text-xs uppercase tracking-[0.2em] text-cyan-100/80">
+        String Stress: {displayStress}%
+      </div>
+    </div>
   );
-}
+};
+
+type GhostSyncProps = {
+  activeUsers: number;
+};
+
+const GhostSync = ({ activeUsers }: GhostSyncProps) => {
+  return (
+    <div className="pt-8 text-[10px] uppercase tracking-[0.3em] text-slate-500">
+      Ghost Sync: {activeUsers} linked echoes
+    </div>
+  );
+};
+
+export const LoomGame = () => {
+  const { heartRate, connect, isConnecting, error } = useHeartRate();
+
+  // Baseline heart rate (e.g., 70). Stress is calculated by the deviation.
+  const stressFactor = heartRate ? Math.max(0, (heartRate - 70) / 50) : 0;
+
+  return (
+    <div className="relative flex h-screen flex-col items-center justify-center bg-slate-950 px-6">
+      {!heartRate ? (
+        <div className="flex flex-col items-center gap-4">
+          <button
+            onClick={() => {
+              void connect();
+            }}
+            disabled={isConnecting}
+            className="rounded-full bg-white px-6 py-3 font-bold text-black transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isConnecting ? 'CONNECTING...' : 'SYNC WEARABLE'}
+          </button>
+          {error ? <p className="text-sm text-red-300">{error}</p> : null}
+        </div>
+      ) : (
+        <>
+          <div className="absolute top-10 text-xs tracking-widest text-white opacity-30">
+            LIVE PULSE: {heartRate} BPM
+          </div>
+
+          <TensionString
+            stressLevel={stressFactor} // Increases "weight" and "dissonance"
+            targetBPM={60} // The goal rhythm to achieve "Snap"
+          />
+
+          <GhostSync activeUsers={5} />
+        </>
+      )}
+    </div>
+  );
+};
+
+export default LoomGame;
