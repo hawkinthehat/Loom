@@ -1,133 +1,105 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+
+import { useMemo, useState } from 'react';
+import { AnimatePresence } from 'framer-motion';
+import { BluetoothButton } from '../components/BluetoothButton';
+import { ShatterEffect } from '../components/ShatterEffect';
+import { TensionString } from '../components/TensionString';
+import { useResonance } from '../hooks/useResonance';
+
+type ThemeMode = 'twilight' | 'clear-sky';
 
 export default function LoomPrototype() {
-  const [bpm, setBpm] = useState(80);
-  const [isActive, setIsActive] = useState(false);
-  const audioCtx = useRef<AudioContext | null>(null);
-  const nextNoteTime = useRef(0);
-  const rafId = useRef<number | null>(null);
-  const isRunning = useRef(false);
-  const bpmRef = useRef(bpm);
+  const [theme, setTheme] = useState<ThemeMode>('twilight');
+  const [heartRate, setHeartRate] = useState(82);
+  const [isSynced, setIsSynced] = useState(false);
+  const [snapped, setSnapped] = useState(false);
 
-  useEffect(() => {
-    bpmRef.current = bpm;
-  }, [bpm]);
+  const stressLevel = useMemo(() => {
+    const min = 50;
+    const max = 180;
+    const clamped = Math.min(Math.max(heartRate, min), max);
+    return Math.round(((clamped - min) / (max - min)) * 100);
+  }, [heartRate]);
 
-  useEffect(() => {
-    return () => {
-      isRunning.current = false;
-      if (rafId.current !== null) {
-        cancelAnimationFrame(rafId.current);
-        rafId.current = null;
-      }
-      if (audioCtx.current && audioCtx.current.state !== 'closed') {
-        void audioCtx.current.close();
-      }
-      audioCtx.current = null;
-    };
-  }, []);
-
-  const playThud = (time: number) => {
-    const ctx = audioCtx.current;
-    if (!ctx) return;
-
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(100, time);
-    osc.frequency.exponentialRampToValueAtTime(0.01, time + 0.4);
-    gain.gain.setValueAtTime(0.3, time);
-    gain.gain.exponentialRampToValueAtTime(0.01, time + 0.4);
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.start(time);
-    osc.stop(time + 0.4);
-  };
-
-  const scheduleLoop = () => {
-    const ctx = audioCtx.current;
-    if (!ctx || !isRunning.current) return;
-
-    while (nextNoteTime.current < ctx.currentTime + 0.1) {
-      playThud(nextNoteTime.current);
-      nextNoteTime.current += 60.0 / bpmRef.current;
-    }
-
-    rafId.current = requestAnimationFrame(scheduleLoop);
-  };
-
-  const stopAudio = () => {
-    isRunning.current = false;
-    if (rafId.current !== null) {
-      cancelAnimationFrame(rafId.current);
-      rafId.current = null;
-    }
-    if (audioCtx.current && audioCtx.current.state === 'running') {
-      void audioCtx.current.suspend();
-    }
-    setIsActive(false);
-  };
-
-  const initAudio = async () => {
-    if (isRunning.current) {
-      stopAudio();
-      return;
-    }
-
-    if (!audioCtx.current) {
-      const AudioContextClass =
-        window.AudioContext ||
-        (window as Window & { webkitAudioContext?: typeof AudioContext })
-          .webkitAudioContext;
-      if (!AudioContextClass) return;
-      audioCtx.current = new AudioContextClass();
-    }
-
-    if (audioCtx.current.state === 'suspended') {
-      await audioCtx.current.resume();
-    }
-
-    nextNoteTime.current = audioCtx.current.currentTime;
-    isRunning.current = true;
-    setIsActive(true);
-    scheduleLoop();
-  };
+  useResonance(isSynced, stressLevel);
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-[#06090f] p-6 font-sans text-[#eef6ff]">
-      <div className="space-y-8 text-center">
-        <h1 className="text-5xl font-light tracking-[0.2em] opacity-80">LOOM</h1>
-
+    <main className={`theme-${theme} loom-bg relative flex min-h-screen flex-col items-center overflow-hidden px-6 py-8 text-[var(--fg)]`}>
+      <header className="z-10 flex w-full max-w-4xl items-center justify-between">
+        <h1 className="text-2xl font-semibold tracking-[0.28em]">LOOM</h1>
         <button
-          onClick={initAudio}
-          className={`flex h-64 w-64 items-center justify-center rounded-full border border-[#244262] transition-all duration-700
-            ${isActive ? 'scale-110 shadow-[0_0_50px_rgba(124,232,255,0.1)]' : 'hover:border-[#7ce8ff]'}
-          `}
+          type="button"
+          onClick={() =>
+            setTheme((prev) => (prev === 'twilight' ? 'clear-sky' : 'twilight'))
+          }
+          className="rounded-full border border-[var(--ring)] px-4 py-2 text-xs font-semibold uppercase tracking-widest transition hover:bg-[var(--accent)] hover:text-[var(--bg)]"
         >
-          <div
-            className={`flex h-32 w-32 items-center justify-center rounded-full border border-[#7ce8ff]/20 ${isActive ? 'animate-ping' : ''}`}
-          >
-            <span className="text-xs uppercase tracking-widest opacity-40">
-              {isActive ? 'Pause Lattice' : 'Initialize'}
-            </span>
-          </div>
+          Theme: {theme === 'twilight' ? 'Twilight' : 'Clear Sky'}
         </button>
+      </header>
 
-        <div className="flex flex-col items-center gap-4 pt-10">
-          <p className="text-[10px] uppercase tracking-[0.3em] text-[#95a7bc]">
-            Tension Control: {bpm} BPM
+      <section className="z-10 mt-8 grid w-full max-w-4xl gap-6 rounded-2xl border border-[var(--ring)] bg-black/10 p-6 backdrop-blur-sm md:grid-cols-[1fr_auto]">
+        <div className="space-y-5">
+          <p className="text-sm text-[var(--muted)]">
+            Drag the obsidian pull downward and release to snap. Synced mode opens
+            the resonance filter for a brighter tone.
           </p>
-          <input
-            type="range"
-            min="40"
-            max="140"
-            value={bpm}
-            onChange={(e) => setBpm(Number(e.target.value))}
-            className="w-48 accent-[#7ce8ff] opacity-50 transition-opacity hover:opacity-100"
-          />
+
+          <div className="space-y-2">
+            <label htmlFor="hr" className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+              Heart Rate: {heartRate} BPM
+            </label>
+            <input
+              id="hr"
+              type="range"
+              min={40}
+              max={180}
+              value={heartRate}
+              onChange={(event) => setHeartRate(Number(event.target.value))}
+              className="w-full accent-[var(--accent)]"
+            />
+          </div>
+
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={() => setIsSynced((prev) => !prev)}
+              className={`rounded-lg border px-4 py-2 text-xs font-bold uppercase tracking-widest transition ${
+                isSynced
+                  ? 'border-[var(--accent)] bg-[var(--accent)] text-[var(--bg)]'
+                  : 'border-[var(--ring)] text-[var(--fg)] hover:border-[var(--accent)]'
+              }`}
+            >
+              {isSynced ? 'Synced' : 'Not Synced'}
+            </button>
+
+            <BluetoothButton
+              onConnected={() => setIsSynced(true)}
+              onHeartRate={({ bpm }) => setHeartRate(bpm)}
+            />
+          </div>
         </div>
-      </div>
+
+        <div className="rounded-xl border border-[var(--ring)] bg-black/20 p-4 text-sm">
+          <p className="text-[var(--muted)]">Stress</p>
+          <p className="mt-1 text-3xl font-semibold">{stressLevel}</p>
+          <p className="mt-4 text-[var(--muted)]">State</p>
+          <p className="mt-1 font-semibold">{isSynced ? 'Bright / Synced' : 'Heavy / Unsynced'}</p>
+        </div>
+      </section>
+
+      <section className="z-10 mt-8 w-full max-w-4xl">
+        <TensionString
+          targetRhythm={heartRate}
+          onSnap={() => {
+            setSnapped(true);
+            window.setTimeout(() => setSnapped(false), 1600);
+          }}
+        />
+      </section>
+
+      <AnimatePresence>{snapped ? <ShatterEffect /> : null}</AnimatePresence>
     </main>
   );
 }
