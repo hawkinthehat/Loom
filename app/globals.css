@@ -1,0 +1,74 @@
+:root {
+  --bg: #050811;
+  --panel: #0d1224;
+  --text: #edf2ff;
+  --muted: #9eb0cf;
+  --accent: #7ce8ff;
+  --accent-strong: #c9f5ff;
+  --border: #244262;
+  --fg: var(--text);
+  --surface: var(--panel);
+  --ring: var(--border);
+}
+
+.theme-twilight {
+  --bg: #050811;
+  --panel: #0d1224;
+  --text: #edf2ff;
+  --muted: #9eb0cf;
+  --accent: #7ce8ff;
+  --accent-strong: #c9f5ff;
+  --border: #244262;
+  --fg: var(--text);
+  --surface: var(--panel);
+  --ring: var(--border);
+}
+
+.theme-clear-sky {
+  --bg: #dff4ff;
+  --panel: #f5fbff;
+  --text: #0f223a;
+  --muted: #40607f;
+  --accent: #0079b8;
+  --accent-strong: #004f79;
+  --border: #79b8e0;
+  --fg: var(--text);
+  --surface: var(--panel);
+  --ring: var(--border);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family:
+    Inter,
+    system-ui,
+    -apple-system,
+    Segoe UI,
+    Roboto,
+    Helvetica,
+    Arial,
+    sans-serif;
+}
+
+.loom-bg {
+  background:
+    radial-gradient(circle at 20% 10%, color-mix(in oklab, var(--accent) 22%, transparent), transparent 36%),
+    radial-gradient(circle at 80% 90%, color-mix(in oklab, var(--accent) 12%, transparent), transparent 42%),
+    var(--bg);
+}
+
+button,
+input {
+  font: inherit;
+}
