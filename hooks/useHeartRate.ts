@@ -2,15 +2,47 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+type BluetoothCharacteristicLike = {
+  value: DataView | null;
+  startNotifications: () => Promise<unknown>;
+  stopNotifications: () => Promise<unknown>;
+  addEventListener: (type: string, listener: EventListener) => void;
+  removeEventListener: (type: string, listener: EventListener) => void;
+};
+
+type BluetoothServiceLike = {
+  getCharacteristic: (characteristic: string) => Promise<BluetoothCharacteristicLike>;
+};
+
+type BluetoothServerLike = {
+  getPrimaryService: (service: string) => Promise<BluetoothServiceLike>;
+};
+
+type BluetoothDeviceLike = {
+  gatt?: {
+    connect: () => Promise<BluetoothServerLike>;
+    connected?: boolean;
+    disconnect: () => void;
+  };
+  addEventListener: (type: string, listener: () => void) => void;
+  removeEventListener: (type: string, listener: () => void) => void;
+};
+
+type BluetoothLike = {
+  requestDevice: (options: unknown) => Promise<BluetoothDeviceLike>;
+};
+
 type HeartRateCharacteristicEvent = Event & {
-  target: BluetoothRemoteGATTCharacteristic;
+  target: {
+    value: DataView | null;
+  };
 };
 
 export const useHeartRate = () => {
   const [heartRate, setHeartRate] = useState<number | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const characteristicRef = useRef<BluetoothRemoteGATTCharacteristic | null>(null);
+  const characteristicRef = useRef<BluetoothCharacteristicLike | null>(null);
   const disconnectRef = useRef<(() => void) | null>(null);
 
   const handleValueChanged = useCallback((event: HeartRateCharacteristicEvent) => {
@@ -42,7 +74,8 @@ export const useHeartRate = () => {
   }, [handleValueChanged]);
 
   const connect = useCallback(async () => {
-    if (!navigator.bluetooth) {
+    const nav = navigator as Navigator & { bluetooth?: BluetoothLike };
+    if (!nav.bluetooth) {
       setError('Web Bluetooth is not supported in this browser.');
       return;
     }
@@ -53,7 +86,7 @@ export const useHeartRate = () => {
     try {
       disconnect();
 
-      const device = await navigator.bluetooth.requestDevice({
+      const device = await nav.bluetooth.requestDevice({
         filters: [{ services: ['heart_rate'] }],
       });
 
