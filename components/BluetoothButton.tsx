@@ -15,6 +15,33 @@ type BluetoothButtonProps = {
 const HEART_RATE_SERVICE = 'heart_rate';
 const HEART_RATE_MEASUREMENT = 'heart_rate_measurement';
 
+type HeartRateRequestOptions = {
+  filters: Array<{ services: string[] }>;
+  optionalServices: string[];
+};
+
+type BluetoothNavigatorShim = Navigator & {
+  bluetooth?: {
+    requestDevice: (options: HeartRateRequestOptions) => Promise<{
+      name?: string;
+      gatt?: {
+        connect: () => Promise<{
+          getPrimaryService: (service: string) => Promise<{
+            getCharacteristic: (characteristic: string) => Promise<{
+              readValue: () => Promise<DataView>;
+              startNotifications: () => Promise<void>;
+              addEventListener: (
+                type: 'characteristicvaluechanged',
+                listener: (event: Event) => void
+              ) => void;
+            }>;
+          }>;
+        }>;
+      };
+    }>;
+  };
+};
+
 const parseHeartRate = (dataView: DataView): number | undefined => {
   const flags = dataView.getUint8(0);
   const isUint16 = (flags & 0x01) === 0x01;
@@ -31,7 +58,9 @@ export const BluetoothButton = ({ onConnected, onHeartRate }: BluetoothButtonPro
   const [error, setError] = useState<string | null>(null);
 
   const connect = async () => {
-    if (!navigator.bluetooth) {
+    const nav = navigator as BluetoothNavigatorShim;
+
+    if (!nav.bluetooth) {
       setError('Web Bluetooth is not supported in this browser.');
       return;
     }
@@ -40,7 +69,7 @@ export const BluetoothButton = ({ onConnected, onHeartRate }: BluetoothButtonPro
     setIsConnecting(true);
 
     try {
-      const device = await navigator.bluetooth.requestDevice({
+      const device = await nav.bluetooth.requestDevice({
         filters: [{ services: [HEART_RATE_SERVICE] }],
         optionalServices: [HEART_RATE_SERVICE],
       });
@@ -57,8 +86,8 @@ export const BluetoothButton = ({ onConnected, onHeartRate }: BluetoothButtonPro
       characteristic.addEventListener(
         'characteristicvaluechanged',
         (event: Event) => {
-          const target = event.target as BluetoothRemoteGATTCharacteristic;
-          const value = target.value;
+          const target = event.target as { value?: DataView } | null;
+          const value = target?.value;
           if (!value) return;
           const nextBpm = parseHeartRate(value);
           if (typeof nextBpm === 'number') {
