@@ -1,8 +1,8 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import { GhostSync } from '@/components/GhostSync';
-import { RhythmicPulse } from '@/components/RhythmicPulse';
-import { useRhythmSync } from '@/hooks/useRhythmSync';
+import { GhostSync } from '../components/GhostSync';
+import { RhythmicPulse } from '../components/RhythmicPulse';
+import { useRhythmSync } from '../hooks/useRhythmSync';
 
 export default function LoomPrototype() {
   const [bpm, setBpm] = useState(80);
