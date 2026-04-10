@@ -14,12 +14,20 @@ type GhostSyncProps = {
 };
 
 export const GhostSync = ({ activeUsers }: GhostSyncProps) => {
+  const hashToUnit = (input: number) => {
+    let x = input >>> 0;
+    x ^= x << 13;
+    x ^= x >>> 17;
+    x ^= x << 5;
+    return (x >>> 0) / 0xffffffff;
+  };
+
   const ghostDots = useMemo<GhostDot[]>(
     () =>
-      Array.from({ length: activeUsers }, () => ({
-        left: Math.random() * 100,
-        top: Math.random() * 100,
-        duration: 3 + Math.random() * 2, // Varied heartbeats
+      Array.from({ length: activeUsers }, (_, idx) => ({
+        left: hashToUnit(activeUsers * 4099 + idx * 3 + 1) * 100,
+        top: hashToUnit(activeUsers * 4099 + idx * 3 + 2) * 100,
+        duration: 3 + hashToUnit(activeUsers * 4099 + idx * 3 + 3) * 2,
       })),
     [activeUsers],
   );

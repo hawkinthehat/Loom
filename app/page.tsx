@@ -2,28 +2,44 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
-import { BluetoothButton } from '../components/BluetoothButton';
 import { GhostSync } from '../components/GhostSync';
 import { RhythmicPulse } from '../components/RhythmicPulse';
 import { ShatterEffect } from '../components/ShatterEffect';
 import { TensionString } from '../components/TensionString';
-import { useRhythmSync } from '../hooks/useRhythmSync';
+import { useHeartRate } from '../hooks/useHeartRate';
 import { useResonance } from '../hooks/useResonance';
+import { useRhythmSync } from '../hooks/useRhythmSync';
 
 type ThemeMode = 'twilight' | 'clear-sky';
 
 export default function LoomPrototype() {
   const [theme, setTheme] = useState<ThemeMode>('twilight');
-  const [heartRate, setHeartRate] = useState(82);
+  const [simulatedHeartRate, setSimulatedHeartRate] = useState(82);
   const [isPulseActive, setIsPulseActive] = useState(false);
   const [snapped, setSnapped] = useState(false);
   const [activeUsers, setActiveUsers] = useState(12);
+
+  const {
+    heartRate: liveHeartRate,
+    connect,
+    disconnect,
+    isConnecting,
+    error,
+  } = useHeartRate();
+
+  const connectionSynced = liveHeartRate !== null;
+  const heartRate = liveHeartRate ?? simulatedHeartRate;
+  const pulseSourceLabel = connectionSynced
+    ? 'Live wearable feed'
+    : 'Simulated fallback';
+
   const audioCtx = useRef<AudioContext | null>(null);
   const nextNoteTime = useRef(0);
   const rafId = useRef<number | null>(null);
   const isRunning = useRef(false);
   const bpmRef = useRef(heartRate);
-  const { isSynced, checkSync } = useRhythmSync(heartRate);
+
+  const { isSynced: rhythmSynced, checkSync } = useRhythmSync(heartRate);
 
   const stressLevel = useMemo(() => {
     const min = 50;
@@ -118,8 +134,8 @@ export default function LoomPrototype() {
     scheduleLoop();
   };
 
-  // Continuous gravity drone: clears up as sync improves.
-  useResonance(isSynced, stressLevel);
+  // Keep resonance tied to timing sync, not just connection state.
+  useResonance(rhythmSynced, stressLevel);
 
   return (
     <main
@@ -127,6 +143,7 @@ export default function LoomPrototype() {
     >
       <GhostSync activeUsers={activeUsers} />
       <RhythmicPulse bpm={heartRate} stressLevel={stressLevel} />
+
       <header className="z-10 flex w-full max-w-4xl items-center justify-between">
         <h1 className="text-2xl font-semibold tracking-[0.28em]">LOOM</h1>
         <button
@@ -147,12 +164,38 @@ export default function LoomPrototype() {
             and brightens when you hit in time.
           </p>
 
+          <div className="flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-[0.2em]">
+            <span
+              className={`rounded-full border px-2 py-1 ${
+                connectionSynced
+                  ? 'border-emerald-300/40 text-emerald-200'
+                  : 'border-amber-300/30 text-amber-200'
+              }`}
+            >
+              {pulseSourceLabel}
+            </span>
+            <span
+              className={`rounded-full border px-2 py-1 ${
+                rhythmSynced
+                  ? 'border-sky-300/40 text-sky-200'
+                  : 'border-[var(--ring)] text-[var(--muted)]'
+              }`}
+            >
+              {rhythmSynced ? 'Rhythm: Synced' : 'Rhythm: Unsynced'}
+            </span>
+            {isConnecting ? (
+              <span className="rounded-full border border-sky-300/40 px-2 py-1 text-sky-200">
+                Pairing...
+              </span>
+            ) : null}
+          </div>
+
           <div className="space-y-2">
             <label
               htmlFor="hr"
               className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]"
             >
-              Heart Rate: {heartRate} BPM
+              Heart Rate Input: {heartRate} BPM
             </label>
             <input
               id="hr"
@@ -160,32 +203,56 @@ export default function LoomPrototype() {
               min={40}
               max={180}
               value={heartRate}
-              onChange={(event) => setHeartRate(Number(event.target.value))}
-              className="w-full accent-[var(--accent)]"
+              disabled={connectionSynced}
+              onChange={(event) => setSimulatedHeartRate(Number(event.target.value))}
+              className="w-full accent-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-50"
             />
+            <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--muted)]">
+              {connectionSynced
+                ? 'Slider locked while wearable controls pulse.'
+                : 'Move slider to simulate pulse when not synced.'}
+            </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
             <button
               type="button"
               onClick={() => {
+                if (connectionSynced) {
+                  disconnect();
+                  return;
+                }
+                void connect();
+              }}
+              disabled={isConnecting}
+              className={`rounded-lg border px-4 py-2 text-xs font-bold uppercase tracking-widest transition ${
+                connectionSynced
+                  ? 'border-emerald-300 bg-emerald-300 text-slate-900'
+                  : 'border-[var(--ring)] text-[var(--fg)] hover:border-[var(--accent)]'
+              } disabled:cursor-not-allowed disabled:opacity-60`}
+            >
+              {connectionSynced
+                ? 'Disconnect Wearable'
+                : isConnecting
+                  ? 'Syncing...'
+                  : 'Sync Wearable'}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
                 void togglePulse();
               }}
               className={`rounded-lg border px-4 py-2 text-xs font-bold uppercase tracking-widest transition ${
-                isSynced
-                  ? 'border-emerald-300 bg-emerald-300 text-slate-900'
-                  : 'border-[var(--ring)] text-[var(--fg)] hover:border-[var(--accent)]'
+                isPulseActive
+                  ? 'border-sky-300 bg-sky-300 text-slate-900'
+                  : 'border-[var(--ring)] text-[var(--fg)] hover:border-sky-300'
               }`}
             >
               {isPulseActive ? 'Pause Heartbeat' : 'Tap Heartbeat'}
             </button>
 
-            <BluetoothButton
-              onConnected={() => {
-                checkSync(Date.now());
-              }}
-              onHeartRate={({ bpm }) => setHeartRate(bpm)}
-            />
+            {error ? <p className="text-xs text-rose-300">{error}</p> : null}
           </div>
 
           <div className="space-y-2">
@@ -212,9 +279,12 @@ export default function LoomPrototype() {
           <p className="mt-1 text-3xl font-semibold">{stressLevel}</p>
           <p className="mt-4 text-[var(--muted)]">State</p>
           <p className="mt-1 font-semibold">
-            {isSynced ? 'Bright / Synced' : 'Heavy / Unsynced'}
+            {rhythmSynced ? 'Bright / Synced' : 'Heavy / Unsynced'}
           </p>
-          <p className="mt-3 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+          <p className="mt-2 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+            Source: {connectionSynced ? 'Live Pulse' : 'Simulated Pulse'}
+          </p>
+          <p className="mt-2 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
             Pulse: {isPulseActive ? 'Running' : 'Stopped'}
           </p>
         </div>
