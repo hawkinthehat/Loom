@@ -1,10 +1,11 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { BluetoothButton } from '../components/BluetoothButton';
 import { ShatterEffect } from '../components/ShatterEffect';
 import { TensionString } from '../components/TensionString';
+import { useLoomAudio } from '../hooks/useLoomAudio';
 import { useResonance } from '../hooks/useResonance';
 
 type ThemeMode = 'twilight' | 'clear-sky';
@@ -14,6 +15,7 @@ export default function LoomPrototype() {
   const [heartRate, setHeartRate] = useState(82);
   const [isSynced, setIsSynced] = useState(false);
   const [snapped, setSnapped] = useState(false);
+  const { initAudio, setBpm } = useLoomAudio();
 
   const stressLevel = useMemo(() => {
     const min = 50;
@@ -22,10 +24,19 @@ export default function LoomPrototype() {
     return Math.round(((clamped - min) / (max - min)) * 100);
   }, [heartRate]);
 
+  // Continuous drone ("Gravity") that brightens when synced.
   useResonance(isSynced, stressLevel);
 
+  // Scheduled heartbeat thud used as the rhythmic pulse.
+  useEffect(() => {
+    setBpm(heartRate);
+  }, [heartRate, setBpm]);
+
   return (
-    <main className={`theme-${theme} loom-bg relative flex min-h-screen flex-col items-center overflow-hidden px-6 py-8 text-[var(--fg)]`}>
+    <main
+      onPointerDown={() => initAudio()}
+      className={`theme-${theme} loom-bg relative flex min-h-screen flex-col items-center overflow-hidden px-6 py-8 text-[var(--fg)]`}
+    >
       <header className="z-10 flex w-full max-w-4xl items-center justify-between">
         <h1 className="text-2xl font-semibold tracking-[0.28em]">LOOM</h1>
         <button
