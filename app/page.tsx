@@ -23,6 +23,7 @@ export default function LoomPrototype() {
 
   const isSynced = liveHeartRate !== null;
   const heartRate = liveHeartRate ?? simulatedHeartRate;
+  const pulseSourceLabel = isSynced ? 'Live wearable feed' : 'Simulated fallback';
 
   const stressLevel = useMemo(() => {
     const min = 50;
@@ -57,12 +58,29 @@ export default function LoomPrototype() {
             the resonance filter for a brighter tone.
           </p>
 
+          <div className="flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-[0.2em]">
+            <span
+              className={`rounded-full border px-2 py-1 ${
+                isSynced
+                  ? 'border-emerald-300/40 text-emerald-200'
+                  : 'border-amber-300/30 text-amber-200'
+              }`}
+            >
+              {pulseSourceLabel}
+            </span>
+            {isConnecting ? (
+              <span className="rounded-full border border-sky-300/40 px-2 py-1 text-sky-200">
+                Pairing...
+              </span>
+            ) : null}
+          </div>
+
           <div className="space-y-2">
             <label
               htmlFor="hr"
               className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]"
             >
-              Heart Rate: {heartRate} BPM {isSynced ? '(live)' : '(simulated)'}
+              Heart Rate Input: {heartRate} BPM
             </label>
             <input
               id="hr"
@@ -74,6 +92,11 @@ export default function LoomPrototype() {
               onChange={(event) => setSimulatedHeartRate(Number(event.target.value))}
               className="w-full accent-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-50"
             />
+            <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--muted)]">
+              {isSynced
+                ? 'Slider locked while wearable controls pulse.'
+                : 'Move slider to simulate pulse when not synced.'}
+            </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
@@ -96,7 +119,7 @@ export default function LoomPrototype() {
               {isSynced
                 ? 'Disconnect Wearable'
                 : isConnecting
-                  ? 'Connecting...'
+                  ? 'Syncing...'
                   : 'Sync Wearable'}
             </button>
             {error ? <p className="text-xs text-rose-300">{error}</p> : null}
@@ -108,7 +131,7 @@ export default function LoomPrototype() {
           <p className="mt-1 text-3xl font-semibold">{stressLevel}</p>
           <p className="mt-4 text-[var(--muted)]">State</p>
           <p className="mt-1 font-semibold">
-            {isSynced ? 'Bright / Synced (Live Pulse)' : 'Heavy / Unsynced'}
+            {isSynced ? 'Bright / Synced (Live Pulse)' : 'Heavy / Unsynced (Simulated Pulse)'}
           </p>
         </div>
       </section>
