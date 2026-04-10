@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 export const useLoomAudio = () => {
   const audioCtx = useRef<AudioContext | null>(null);
@@ -7,12 +7,12 @@ export const useLoomAudio = () => {
   const scheduleAheadTime = 0.1; // Seconds
   const lookahead = 25.0; // Milliseconds
 
-  const nextNote = () => {
+  const nextNote = useCallback(() => {
     const secondsPerBeat = 60.0 / bpm;
     nextNoteTime.current += secondsPerBeat;
-  };
+  }, [bpm]);
 
-  const scheduleNote = (time: number) => {
+  const scheduleNote = useCallback((time: number) => {
     if (!audioCtx.current) return;
 
     // Create a simple "Obsidian" thud sound
@@ -31,7 +31,7 @@ export const useLoomAudio = () => {
 
     osc.start(time);
     osc.stop(time + 0.5);
-  };
+  }, []);
 
   useEffect(() => {
     const timerID = setInterval(() => {
@@ -45,7 +45,7 @@ export const useLoomAudio = () => {
       }
     }, lookahead);
     return () => clearInterval(timerID);
-  }, [bpm]);
+  }, [nextNote, scheduleNote]);
 
   const initAudio = () => {
     if (!audioCtx.current) {
