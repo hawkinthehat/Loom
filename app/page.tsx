@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { GhostSync } from '../components/GhostSync';
 import { RhythmicPulse } from '../components/RhythmicPulse';
 import { ShatterEffect } from '../components/ShatterEffect';
 import { TensionString } from '../components/TensionString';
+import { useLoomAudio } from '../hooks/useLoomAudio';
 import { useHeartRate } from '../hooks/useHeartRate';
 import { useResonance } from '../hooks/useResonance';
 import { useRhythmSync } from '../hooks/useRhythmSync';
@@ -15,7 +16,6 @@ type ThemeMode = 'twilight' | 'clear-sky';
 export default function LoomPrototype() {
   const [theme, setTheme] = useState<ThemeMode>('twilight');
   const [simulatedHeartRate, setSimulatedHeartRate] = useState(82);
-  const [isPulseActive, setIsPulseActive] = useState(false);
   const [snapped, setSnapped] = useState(false);
   const [activeUsers, setActiveUsers] = useState(12);
 
@@ -33,11 +33,7 @@ export default function LoomPrototype() {
     ? 'Live wearable feed'
     : 'Simulated fallback';
 
-  const audioCtx = useRef<AudioContext | null>(null);
-  const nextNoteTime = useRef(0);
-  const rafId = useRef<number | null>(null);
-  const isRunning = useRef(false);
-  const bpmRef = useRef(heartRate);
+  const { initAudio, setBpm, isPlaying: isPulseActive, toggleAudio } = useLoomAudio();
 
   const { isSynced: rhythmSynced, checkSync } = useRhythmSync(heartRate);
 
@@ -49,89 +45,12 @@ export default function LoomPrototype() {
   }, [heartRate]);
 
   useEffect(() => {
-    bpmRef.current = heartRate;
-  }, [heartRate]);
-
-  useEffect(() => {
-    return () => {
-      isRunning.current = false;
-      if (rafId.current !== null) {
-        cancelAnimationFrame(rafId.current);
-        rafId.current = null;
-      }
-      if (audioCtx.current && audioCtx.current.state !== 'closed') {
-        void audioCtx.current.close();
-      }
-      audioCtx.current = null;
-    };
-  }, []);
-
-  const playThud = (time: number) => {
-    const ctx = audioCtx.current;
-    if (!ctx) return;
-
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(100, time);
-    osc.frequency.exponentialRampToValueAtTime(0.01, time + 0.4);
-    gain.gain.setValueAtTime(0.22, time);
-    gain.gain.exponentialRampToValueAtTime(0.01, time + 0.4);
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.start(time);
-    osc.stop(time + 0.4);
-  };
-
-  const scheduleLoop = () => {
-    const ctx = audioCtx.current;
-    if (!ctx || !isRunning.current) return;
-
-    while (nextNoteTime.current < ctx.currentTime + 0.1) {
-      playThud(nextNoteTime.current);
-      nextNoteTime.current += 60.0 / bpmRef.current;
-    }
-
-    rafId.current = requestAnimationFrame(scheduleLoop);
-  };
-
-  const stopPulse = () => {
-    isRunning.current = false;
-    if (rafId.current !== null) {
-      cancelAnimationFrame(rafId.current);
-      rafId.current = null;
-    }
-    if (audioCtx.current && audioCtx.current.state === 'running') {
-      void audioCtx.current.suspend();
-    }
-    setIsPulseActive(false);
-  };
+    setBpm(heartRate);
+  }, [heartRate, setBpm]);
 
   const togglePulse = async () => {
     checkSync(Date.now());
-
-    if (isRunning.current) {
-      stopPulse();
-      return;
-    }
-
-    if (!audioCtx.current) {
-      const AudioContextClass =
-        window.AudioContext ||
-        (window as Window & { webkitAudioContext?: typeof AudioContext })
-          .webkitAudioContext;
-      if (!AudioContextClass) return;
-      audioCtx.current = new AudioContextClass();
-    }
-
-    if (audioCtx.current.state === 'suspended') {
-      await audioCtx.current.resume();
-    }
-
-    nextNoteTime.current = audioCtx.current.currentTime;
-    isRunning.current = true;
-    setIsPulseActive(true);
-    scheduleLoop();
+    await toggleAudio();
   };
 
   // Keep resonance tied to timing sync, not just connection state.
@@ -241,6 +160,7 @@ export default function LoomPrototype() {
             <button
               type="button"
               onClick={() => {
+                initAudio();
                 void togglePulse();
               }}
               className={`rounded-lg border px-4 py-2 text-xs font-bold uppercase tracking-widest transition ${
