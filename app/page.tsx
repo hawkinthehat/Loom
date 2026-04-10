@@ -2,17 +2,21 @@
 import { useEffect, useRef, useState } from 'react';
 import { GhostSync } from '../components/GhostSync';
 import { RhythmicPulse } from '../components/RhythmicPulse';
+import { ShatterEffect } from '../components/ShatterEffect';
 import { useRhythmSync } from '../hooks/useRhythmSync';
 
 export default function LoomPrototype() {
   const [bpm] = useState(80);
   const [stressLevel] = useState(35); // This will hook to your wearable
+  const [isBursting, setIsBursting] = useState(false);
+  const [burstKey, setBurstKey] = useState(0);
 
   const { isSynced, checkSync } = useRhythmSync(bpm);
 
   const audioCtx = useRef<AudioContext | null>(null);
   const droneOsc = useRef<OscillatorNode | null>(null);
   const filterNode = useRef<BiquadFilterNode | null>(null);
+  const burstTimeoutRef = useRef<number | null>(null);
 
   // 1. RESOLUTION: Initialize the Continuous Resonance (The "Looming" Drone)
   const initAudio = async () => {
@@ -44,14 +48,37 @@ export default function LoomPrototype() {
     }
   }, [isSynced]);
 
+  useEffect(() => {
+    return () => {
+      if (burstTimeoutRef.current !== null) {
+        window.clearTimeout(burstTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const triggerBurst = () => {
+    setBurstKey((prev) => prev + 1);
+    setIsBursting(true);
+    if (burstTimeoutRef.current !== null) {
+      window.clearTimeout(burstTimeoutRef.current);
+    }
+    burstTimeoutRef.current = window.setTimeout(() => {
+      setIsBursting(false);
+    }, 8500);
+  };
+
   const handleLoomTap = async () => {
     await initAudio();
-    checkSync(Date.now());
+    const hit = checkSync(Date.now());
+    if (hit) {
+      triggerBurst();
+    }
   };
 
   return (
     <main className="h-screen bg-slate-950 overflow-hidden relative" onClick={handleLoomTap}>
       <GhostSync activeUsers={12} />
+      {isBursting ? <ShatterEffect key={burstKey} /> : null}
       
       {/* The Rhythmic Pulse (The Beat to follow) */}
       <RhythmicPulse bpm={bpm} stressLevel={stressLevel} />
