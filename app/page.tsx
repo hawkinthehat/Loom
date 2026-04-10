@@ -1,24 +1,40 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { AnimatePresence } from 'framer-motion';
+import { BluetoothButton } from '../components/BluetoothButton';
 import { GhostSync } from '../components/GhostSync';
 import { RhythmicPulse } from '../components/RhythmicPulse';
+import { ShatterEffect } from '../components/ShatterEffect';
+import { TensionString } from '../components/TensionString';
 import { useRhythmSync } from '../hooks/useRhythmSync';
+import { useResonance } from '../hooks/useResonance';
+
+type ThemeMode = 'twilight' | 'clear-sky';
 
 export default function LoomPrototype() {
-  const [bpm, setBpm] = useState(80);
-  const [isActive, setIsActive] = useState(false);
-  const [stressLevel, setStressLevel] = useState(35);
+  const [theme, setTheme] = useState<ThemeMode>('twilight');
+  const [heartRate, setHeartRate] = useState(82);
+  const [isPulseActive, setIsPulseActive] = useState(false);
+  const [snapped, setSnapped] = useState(false);
   const [activeUsers, setActiveUsers] = useState(12);
   const audioCtx = useRef<AudioContext | null>(null);
   const nextNoteTime = useRef(0);
   const rafId = useRef<number | null>(null);
   const isRunning = useRef(false);
-  const bpmRef = useRef(bpm);
-  const { isSynced, checkSync } = useRhythmSync(bpm);
+  const bpmRef = useRef(heartRate);
+  const { isSynced, checkSync } = useRhythmSync(heartRate);
+
+  const stressLevel = useMemo(() => {
+    const min = 50;
+    const max = 180;
+    const clamped = Math.min(Math.max(heartRate, min), max);
+    return Math.round(((clamped - min) / (max - min)) * 100);
+  }, [heartRate]);
 
   useEffect(() => {
-    bpmRef.current = bpm;
-  }, [bpm]);
+    bpmRef.current = heartRate;
+  }, [heartRate]);
 
   useEffect(() => {
     return () => {
@@ -43,7 +59,7 @@ export default function LoomPrototype() {
     osc.type = 'sine';
     osc.frequency.setValueAtTime(100, time);
     osc.frequency.exponentialRampToValueAtTime(0.01, time + 0.4);
-    gain.gain.setValueAtTime(0.3, time);
+    gain.gain.setValueAtTime(0.22, time);
     gain.gain.exponentialRampToValueAtTime(0.01, time + 0.4);
     osc.connect(gain);
     gain.connect(ctx.destination);
@@ -63,7 +79,7 @@ export default function LoomPrototype() {
     rafId.current = requestAnimationFrame(scheduleLoop);
   };
 
-  const stopAudio = () => {
+  const stopPulse = () => {
     isRunning.current = false;
     if (rafId.current !== null) {
       cancelAnimationFrame(rafId.current);
@@ -72,14 +88,14 @@ export default function LoomPrototype() {
     if (audioCtx.current && audioCtx.current.state === 'running') {
       void audioCtx.current.suspend();
     }
-    setIsActive(false);
+    setIsPulseActive(false);
   };
 
-  const initAudio = async () => {
+  const togglePulse = async () => {
     checkSync(Date.now());
 
     if (isRunning.current) {
-      stopAudio();
+      stopPulse();
       return;
     }
 
@@ -98,80 +114,123 @@ export default function LoomPrototype() {
 
     nextNoteTime.current = audioCtx.current.currentTime;
     isRunning.current = true;
-    setIsActive(true);
+    setIsPulseActive(true);
     scheduleLoop();
   };
 
+  // Continuous gravity drone: clears up as sync improves.
+  useResonance(isSynced, stressLevel);
+
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-[#06090f] p-6 font-sans text-[#eef6ff]">
+    <main
+      className={`theme-${theme} loom-bg relative flex min-h-screen flex-col items-center overflow-hidden px-6 py-8 text-[var(--fg)]`}
+    >
       <GhostSync activeUsers={activeUsers} />
-      <RhythmicPulse bpm={bpm} stressLevel={stressLevel} />
-      <div className="space-y-8 text-center">
-        <h1 className="text-5xl font-light tracking-[0.2em] opacity-80">LOOM</h1>
-
+      <RhythmicPulse bpm={heartRate} stressLevel={stressLevel} />
+      <header className="z-10 flex w-full max-w-4xl items-center justify-between">
+        <h1 className="text-2xl font-semibold tracking-[0.28em]">LOOM</h1>
         <button
-          onClick={initAudio}
-          className={`relative z-10 flex h-64 w-64 items-center justify-center rounded-full border transition-all duration-700
-            ${
-              isSynced
-                ? 'border-emerald-300 shadow-[0_0_60px_rgba(52,211,153,0.25)]'
-                : 'border-[#244262]'
-            }
-            ${isActive ? 'scale-110 shadow-[0_0_50px_rgba(124,232,255,0.1)]' : 'hover:border-[#7ce8ff]'}
-          `}
+          type="button"
+          onClick={() =>
+            setTheme((prev) => (prev === 'twilight' ? 'clear-sky' : 'twilight'))
+          }
+          className="rounded-full border border-[var(--ring)] px-4 py-2 text-xs font-semibold uppercase tracking-widest transition hover:bg-[var(--accent)] hover:text-[var(--bg)]"
         >
-          <div
-            className={`flex h-32 w-32 items-center justify-center rounded-full border border-[#7ce8ff]/20 ${isActive ? 'animate-ping' : ''}`}
-          >
-            <span className="text-xs uppercase tracking-widest opacity-40">
-              {isActive ? 'Pause Lattice' : 'Initialize'}
-            </span>
-          </div>
+          Theme: {theme === 'twilight' ? 'Twilight' : 'Clear Sky'}
         </button>
-        <p
-          className={`text-xs uppercase tracking-[0.25em] ${
-            isSynced ? 'text-emerald-300' : 'text-[#95a7bc]'
-          }`}
-        >
-          {isSynced ? 'Critical Hit' : 'Off Beat'}
-        </p>
+      </header>
 
-        <div className="flex flex-col items-center gap-4 pt-10">
-          <p className="text-[10px] uppercase tracking-[0.3em] text-[#95a7bc]">
-            Tension Control: {bpm} BPM
+      <section className="z-10 mt-8 grid w-full max-w-4xl gap-6 rounded-2xl border border-[var(--ring)] bg-black/10 p-6 backdrop-blur-sm md:grid-cols-[1fr_auto]">
+        <div className="space-y-5">
+          <p className="text-sm text-[var(--muted)]">
+            Tap Heartbeat to test rhythm sync. The gravity drone runs continuously
+            and brightens when you hit in time.
           </p>
-          <input
-            type="range"
-            min="40"
-            max="140"
-            value={bpm}
-            onChange={(e) => setBpm(Number(e.target.value))}
-            className="w-48 accent-[#7ce8ff] opacity-50 transition-opacity hover:opacity-100"
-          />
-          <p className="text-[10px] uppercase tracking-[0.3em] text-[#95a7bc]">
-            Stress Level: {stressLevel}
-          </p>
-          <input
-            type="range"
-            min="0"
-            max="100"
-            value={stressLevel}
-            onChange={(e) => setStressLevel(Number(e.target.value))}
-            className="w-48 accent-rose-400 opacity-50 transition-opacity hover:opacity-100"
-          />
-          <p className="text-[10px] uppercase tracking-[0.3em] text-[#95a7bc]">
-            Ghost Users: {activeUsers}
-          </p>
-          <input
-            type="range"
-            min="0"
-            max="30"
-            value={activeUsers}
-            onChange={(e) => setActiveUsers(Number(e.target.value))}
-            className="w-48 accent-blue-300 opacity-50 transition-opacity hover:opacity-100"
-          />
+
+          <div className="space-y-2">
+            <label
+              htmlFor="hr"
+              className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]"
+            >
+              Heart Rate: {heartRate} BPM
+            </label>
+            <input
+              id="hr"
+              type="range"
+              min={40}
+              max={180}
+              value={heartRate}
+              onChange={(event) => setHeartRate(Number(event.target.value))}
+              className="w-full accent-[var(--accent)]"
+            />
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                void togglePulse();
+              }}
+              className={`rounded-lg border px-4 py-2 text-xs font-bold uppercase tracking-widest transition ${
+                isSynced
+                  ? 'border-emerald-300 bg-emerald-300 text-slate-900'
+                  : 'border-[var(--ring)] text-[var(--fg)] hover:border-[var(--accent)]'
+              }`}
+            >
+              {isPulseActive ? 'Pause Heartbeat' : 'Tap Heartbeat'}
+            </button>
+
+            <BluetoothButton
+              onConnected={() => {
+                checkSync(Date.now());
+              }}
+              onHeartRate={({ bpm }) => setHeartRate(bpm)}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label
+              htmlFor="ghost-users"
+              className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]"
+            >
+              Ghost Users: {activeUsers}
+            </label>
+            <input
+              id="ghost-users"
+              type="range"
+              min={0}
+              max={30}
+              value={activeUsers}
+              onChange={(event) => setActiveUsers(Number(event.target.value))}
+              className="w-full accent-[var(--accent)]"
+            />
+          </div>
         </div>
-      </div>
+
+        <div className="rounded-xl border border-[var(--ring)] bg-black/20 p-4 text-sm">
+          <p className="text-[var(--muted)]">Stress</p>
+          <p className="mt-1 text-3xl font-semibold">{stressLevel}</p>
+          <p className="mt-4 text-[var(--muted)]">State</p>
+          <p className="mt-1 font-semibold">
+            {isSynced ? 'Bright / Synced' : 'Heavy / Unsynced'}
+          </p>
+          <p className="mt-3 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+            Pulse: {isPulseActive ? 'Running' : 'Stopped'}
+          </p>
+        </div>
+      </section>
+
+      <section className="z-10 mt-8 w-full max-w-4xl">
+        <TensionString
+          targetRhythm={heartRate}
+          onSnap={() => {
+            setSnapped(true);
+            window.setTimeout(() => setSnapped(false), 1600);
+          }}
+        />
+      </section>
+
+      <AnimatePresence>{snapped ? <ShatterEffect /> : null}</AnimatePresence>
     </main>
   );
 }
