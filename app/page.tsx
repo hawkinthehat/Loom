@@ -5,10 +5,11 @@ import { RhythmicPulse } from '../components/RhythmicPulse';
 import { useRhythmSync } from '../hooks/useRhythmSync';
 
 export default function LoomPrototype() {
-  const [bpm, setBpm] = useState(80);
-  const [isSynced, setIsSynced] = useState(false);
-  const [stressLevel, setStressLevel] = useState(35); // This will hook to your wearable
-  
+  const [bpm] = useState(80);
+  const [stressLevel] = useState(35); // This will hook to your wearable
+
+  const { isSynced, checkSync } = useRhythmSync(bpm);
+
   const audioCtx = useRef<AudioContext | null>(null);
   const droneOsc = useRef<OscillatorNode | null>(null);
   const filterNode = useRef<BiquadFilterNode | null>(null);
@@ -43,8 +44,13 @@ export default function LoomPrototype() {
     }
   }, [isSynced]);
 
+  const handleLoomTap = async () => {
+    await initAudio();
+    checkSync(Date.now());
+  };
+
   return (
-    <main className="h-screen bg-slate-950 overflow-hidden relative" onClick={initAudio}>
+    <main className="h-screen bg-slate-950 overflow-hidden relative" onClick={handleLoomTap}>
       <GhostSync activeUsers={12} />
       
       {/* The Rhythmic Pulse (The Beat to follow) */}
